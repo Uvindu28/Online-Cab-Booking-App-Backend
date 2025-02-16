@@ -10,7 +10,7 @@ public class BookingRequest {
     private String carId;
     private String pickupLocation;
     private String destination;
-    private LocalDateTime pickupDate;
+    private String pickupDate;
     private boolean driverRequired;
 
 }

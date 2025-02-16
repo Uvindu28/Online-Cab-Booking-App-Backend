@@ -6,9 +6,11 @@ import java.util.function.Function;
 import com.system.megacitycab.model.Admin;
 import com.system.megacitycab.model.Car;
 import com.system.megacitycab.model.Customer;
+import com.system.megacitycab.model.Driver;
 import com.system.megacitycab.repository.AdminRepository;
 import com.system.megacitycab.repository.CarRepository;
 import com.system.megacitycab.repository.CustomerRepository;
+import com.system.megacitycab.repository.DriverRepository;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +40,8 @@ public class JwtUtil {
 
     @Value("${app.secret}")
     private String secret;
+    @Autowired
+    private DriverRepository driverRepository;
 
     private SecretKey key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));  // Generate key with secret
@@ -59,8 +63,8 @@ public class JwtUtil {
             userId = customerRepository.findByEmail(userDetails.getUsername())
                     .map(Customer::getCustomerId).orElse(null);
         } else if (role.equals("ROLE_DRIVER")) {
-            userId = carRepository.findById(userDetails.getUsername())
-                    .map(Car::getCarId).orElse(null);
+            userId = driverRepository.findByEmail(userDetails.getUsername())
+                    .map(Driver::getDriverId).orElse(null);
         } else if (role.equals("ROLE_ADMIN")) {
             userId = adminRepository.findByEmail(userDetails.getUsername())
                     .map(Admin::getAdminId).orElse(null);

@@ -42,54 +42,51 @@ public class DriverController {
 
     @PutMapping("/updatedriver/{driverId}")
     public ResponseEntity<Driver> updateDriver(
-            @PathVariable String driverId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody Driver driver){
-        log.info("Updating driver with ID: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
-        driver.setDriverId(driverId);
-        Driver updateDriver = driverService.updateDriver(driverId, driver);
-        return ResponseEntity.ok(updateDriver);
+            @PathVariable String driverId,
+            @RequestBody Driver driver) {
+        String email = userDetails.getUsername();
+        log.info("Updating driver with ID: {} for email: {}", driverId, email);
 
+        Driver updatedDriver = driverService.updateDriver(driverId, driver);
+        return ResponseEntity.ok(updatedDriver);
     }
 
     @PutMapping("/{driverId}/availability")
     public ResponseEntity<Driver> updateAvailability(
-            @PathVariable String driverId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody Map<String, Boolean> availability){
-        log.info("Updating availability for driver: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @PathVariable String driverId,
+            @RequestBody Map<String, Boolean> availability) {
+        String email = userDetails.getUsername();
+        log.info("Updating availability for driver: {} for email: {}", driverId, email);
+
+        if (!availability.containsKey("availability")) {
+            return ResponseEntity.badRequest().build(); // ✅ Prevent NullPointerException
+        }
+
         Driver driver = driverService.updateAvailability(driverId, availability.get("availability"));
         return ResponseEntity.ok(driver);
     }
 
     @GetMapping("/{driverId}/bookings")
     public ResponseEntity<List<Booking>> getDriverBookings(
-            @PathVariable String driverId,
-            @AuthenticationPrincipal UserDetails userDetails){
-        log.info("Fetching bookings for driver: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+        log.info("Fetching bookings for driver: {} for email: {}", driverId, email);
+
         List<Booking> bookings = driverService.getDriverBookings(driverId);
         return ResponseEntity.ok(bookings);
-
     }
 
     @DeleteMapping("/{driverId}")
     public ResponseEntity<Void> deleteDriver(
-            @PathVariable String driverId,
-            @AuthenticationPrincipal UserDetails userDetails){
-        log.info("Deleting driver with ID: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+        log.info("Deleting driver with ID: {} for email: {}", driverId, email);
+
         driverService.deleteDriver(driverId);
         return ResponseEntity.noContent().build();
-    }
-
-    public void validateDriverAuthorization(UserDetails userDetails, String driverId){
-        if(!userDetails.getUsername().equals(driverId)){
-            log.info("Authorization failed: authenticated user {} does not match driver ID {}",
-                    userDetails.getUsername(), driverId);
-            throw new UnauthorizedException("Not authorized to perform this action");
-        }
     }
 }

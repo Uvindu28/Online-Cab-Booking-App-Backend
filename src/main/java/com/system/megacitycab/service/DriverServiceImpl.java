@@ -95,10 +95,10 @@ public class DriverServiceImpl implements DriverService{
             boolean hasActiveBookings = activeBookings.stream()
                     .anyMatch(booking ->
                             booking.getStatus() == BookingStatus.CONFIRMED ||
-                            booking.getStatus() == BookingStatus.IN_PROGRESS
+                                    booking.getStatus() == BookingStatus.IN_PROGRESS
                     );
-            if(!hasActiveBookings){
-                throw new IllegalStateException("Cannot Update availability. Driver has active bookings");
+            if(hasActiveBookings){
+                throw new IllegalStateException("Cannot update availability. Driver has active bookings");
             }
         }
         driver.setAvailable(availability);

@@ -1,14 +1,15 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import com.system.megacitycab.model.Car;
 import com.system.megacitycab.repository.CarRepository;
+import com.system.megacitycab.service.CarService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
-public class CarServiceImpl implements CarService{
+public class CarServiceImpl implements CarService {
 
     @Autowired
     private CarRepository carRepository;

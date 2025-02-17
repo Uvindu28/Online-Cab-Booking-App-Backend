@@ -4,11 +4,9 @@ import java.util.Date;
 import java.util.function.Function;
 
 import com.system.megacitycab.model.Admin;
-import com.system.megacitycab.model.Car;
 import com.system.megacitycab.model.Customer;
 import com.system.megacitycab.model.Driver;
 import com.system.megacitycab.repository.AdminRepository;
-import com.system.megacitycab.repository.CarRepository;
 import com.system.megacitycab.repository.CustomerRepository;
 import com.system.megacitycab.repository.DriverRepository;
 import io.jsonwebtoken.io.Decoders;
@@ -33,9 +31,6 @@ public class JwtUtil {
     private CustomerRepository customerRepository;
 
     @Autowired
-    private CarRepository carRepository;
-
-    @Autowired
     private AdminRepository adminRepository;
 
     @Value("${app.secret}")
@@ -50,13 +45,11 @@ public class JwtUtil {
     public String generateToken(Authentication authentication) {
         UserDetails userDetails = (UserDetails) authentication.getPrincipal();
 
-        // Get role
         String role = userDetails.getAuthorities().stream()
                 .findFirst()
                 .map(GrantedAuthority::getAuthority)
                 .orElse("USER");
 
-        // Fetch the userId from the repositories
         String userId = null;
 
         if (role.equals("ROLE_CUSTOMER")) {
@@ -101,7 +94,6 @@ public class JwtUtil {
         final String username = extractEmail(token);
         final String userId = extractUserId(token);
 
-        // Add logic to validate user ID and ensure it's correct
         return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
     }
 

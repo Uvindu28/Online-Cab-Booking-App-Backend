@@ -1,9 +1,11 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Optional;
 
+import com.system.megacitycab.service.EmailService;
+import com.system.megacitycab.service.PasswordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -17,7 +19,7 @@ import com.system.megacitycab.repository.DriverRepository;
 import com.system.megacitycab.repository.OtpStorageRepository;
 
 @Service
-public class PasswordServiceImpl implements PasswordService{
+public class PasswordServiceImpl implements PasswordService {
     @Autowired
     private CustomerRepository customerRepository;
 

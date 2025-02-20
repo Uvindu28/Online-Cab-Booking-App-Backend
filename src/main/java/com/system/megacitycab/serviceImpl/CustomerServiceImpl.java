@@ -1,7 +1,8 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import java.util.List;
 
+import com.system.megacitycab.service.CustomerService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -11,7 +12,7 @@ import com.system.megacitycab.repository.CustomerRepository;
 import com.system.megacitycab.repository.DriverRepository;
 
 @Service
-public class CustomerServiceImpl implements CustomerService{
+public class CustomerServiceImpl implements CustomerService {
 
     @Autowired
     private CustomerRepository customerRepository;

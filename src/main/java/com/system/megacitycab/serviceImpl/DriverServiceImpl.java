@@ -1,12 +1,14 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import java.util.List;
 
 import com.system.megacitycab.exception.ResourceNotFoundException;
 import com.system.megacitycab.model.Booking;
 import com.system.megacitycab.model.BookingStatus;
+import com.system.megacitycab.model.Car;
 import com.system.megacitycab.repository.BookingRepository;
 import com.system.megacitycab.repository.CarRepository;
+import com.system.megacitycab.service.DriverService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Slf4j
-public class DriverServiceImpl implements DriverService{
+public class DriverServiceImpl implements DriverService {
 
     @Autowired
     private DriverRepository driverRepository;
@@ -53,14 +55,21 @@ public class DriverServiceImpl implements DriverService{
     }
 
     @Override
-    public ResponseEntity<?> createDriver(Driver driver) {
+    public ResponseEntity<?> createDriver(Driver driver, Car car) {
         if (isEmailTaken(driver.getEmail())) {
             return ResponseEntity.badRequest()
                 .body("Email already exists: " + driver.getEmail());
         }
         String encodedPassword = passwordEncoder.encode(driver.getPassword());
         driver.setPassword(encodedPassword);
-        return ResponseEntity.ok(driverRepository.save(driver));
+        if (car != null){
+            Car savedCar = carRepository.save(car);
+            driver.setCarId(savedCar.getCarId());
+        }
+
+        Driver savedDriver = driverRepository.save(driver);
+
+        return ResponseEntity.ok(savedDriver);
     }
 
     @Override
@@ -95,10 +104,10 @@ public class DriverServiceImpl implements DriverService{
             boolean hasActiveBookings = activeBookings.stream()
                     .anyMatch(booking ->
                             booking.getStatus() == BookingStatus.CONFIRMED ||
-                            booking.getStatus() == BookingStatus.IN_PROGRESS
+                                    booking.getStatus() == BookingStatus.IN_PROGRESS
                     );
-            if(!hasActiveBookings){
-                throw new IllegalStateException("Cannot Update availability. Driver has active bookings");
+            if(hasActiveBookings){
+                throw new IllegalStateException("Cannot update availability. Driver has active bookings");
             }
         }
         driver.setAvailable(availability);

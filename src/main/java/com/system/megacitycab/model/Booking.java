@@ -6,7 +6,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
 
 @Document(collection = "bookings")
 @Data
@@ -26,9 +25,9 @@ public class Booking {
 
     private String destination;
 
-    private LocalDateTime bookingDate;
+    private String bookingDate;
 
-    private LocalDateTime pickupDate;
+    private String pickupDate;
 
     private double totalAmount;
 
@@ -42,13 +41,17 @@ public class Booking {
 
     private String cancellationReason;
 
-    private LocalDateTime cancellationTime;
+    private String cancellationTime;
 
     private boolean refundIssued = false;
 
     private double refundAmount;
 
     public boolean canBeCancelled(){
+        return status == BookingStatus.PENDING || status == BookingStatus.CONFIRMED;
+    }
+
+    public boolean canBeDeleted() {
         return status == BookingStatus.PENDING || status == BookingStatus.CONFIRMED;
     }
 }

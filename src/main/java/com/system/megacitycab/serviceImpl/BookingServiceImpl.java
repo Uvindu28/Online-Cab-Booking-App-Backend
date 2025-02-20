@@ -1,4 +1,4 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import com.system.megacitycab.dto.BookingRequest;
 import com.system.megacitycab.dto.CancellationRequest;
@@ -11,6 +11,7 @@ import com.system.megacitycab.repository.BookingRepository;
 import com.system.megacitycab.repository.CarRepository;
 import com.system.megacitycab.repository.CustomerRepository;
 import com.system.megacitycab.repository.DriverRepository;
+import com.system.megacitycab.service.BookingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,11 +20,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Service
 @Slf4j
 public class BookingServiceImpl implements BookingService {
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final DateTimeFormatter ISO_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     @Autowired
     private BookingRepository bookingRepository;
@@ -53,21 +59,21 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public Booking createBooking(BookingRequest request) {
-        // Validate car availability
+
         Car car = carRepository.findById(request.getCarId())
                 .orElseThrow(() -> new ResourceNotFoundException("Car not found"));
         if (!isCarAvailableForTime(car, request.getPickupDate())) {
             throw new InvalidBookingException("Car is not available for requested time");
         }
 
-        // Create booking
+
         Booking booking = new Booking();
         booking.setCustomerId(request.getCustomerId());
         booking.setCarId(request.getCarId());
         booking.setPickupLocation(request.getPickupLocation());
         booking.setDestination(request.getDestination());
         booking.setPickupDate(request.getPickupDate());
-        booking.setBookingDate(LocalDateTime.now());
+        booking.setBookingDate(LocalDateTime.now().format(DATE_FORMATTER));
         booking.setDriverRequired(request.isDriverRequired());
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setTotalAmount(calculateBookingAmount(car, request));
@@ -83,7 +89,31 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.save(booking);
     }
 
-    private boolean isCarAvailableForTime(Car car, LocalDateTime requestedTime) {
+    @Override
+    public void deleteBooking(String customerId, String bookingId){
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+
+
+        if (!booking.getCustomerId().equals(customerId)) {
+            throw new UnauthorizedException("Not authorized to delete this booking");
+        }
+
+        if (!booking.canBeDeleted()) {
+            throw new InvalidBookingStateException("Booking cannot be deleted in current state");
+        }
+
+
+        releaseBookingResource(booking);
+
+
+        bookingRepository.delete(booking);
+        log.info("Deleted booking with ID: {} for customer: {}", bookingId, customerId);
+
+    }
+
+    private boolean isCarAvailableForTime(Car car, String requestedTime) {
         if (!car.isAvailable()) {
             return false;
         }
@@ -95,9 +125,11 @@ public class BookingServiceImpl implements BookingService {
                 .noneMatch(booking -> isTimeOverlapping(booking.getPickupDate(), requestedTime));
     }
 
-    private boolean isTimeOverlapping(LocalDateTime existing, LocalDateTime requested) {
+    private boolean isTimeOverlapping(String existing, String requested) {
+        LocalDateTime existingTime = LocalDateTime.parse(existing, DATE_FORMATTER);
+        LocalDateTime requestedTime = LocalDateTime.parse(requested, DATE_FORMATTER);
         Duration buffer = Duration.ofHours(1);
-        return Math.abs(Duration.between(existing, requested).toHours()) < buffer.toHours();
+        return Math.abs(Duration.between(existingTime, requestedTime).toHours()) < buffer.toHours();
     }
 
     private double calculateBookingAmount(Car car, BookingRequest request) {
@@ -129,27 +161,46 @@ public class BookingServiceImpl implements BookingService {
 
     @Transactional
     public Booking cancelBooking(String customerId, CancellationRequest request) {
-        Booking booking = bookingRepository.findById(request.getBookingId())
-                .orElseThrow(() -> new ResourceNotFoundException("Booking not found"));
+        log.info("Cancelling booking with ID: {} for customer: {}", request.getBookingId(), customerId);
 
+        // Validate booking ID
+        if (request.getBookingId() == null || request.getBookingId().isEmpty()) {
+            throw new IllegalArgumentException("Booking ID cannot be null or empty");
+        }
+
+        // Fetch booking
+        Booking booking = bookingRepository.findById(request.getBookingId())
+                .orElseThrow(() -> {
+                    log.error("Booking not found with ID: {}", request.getBookingId());
+                    return new ResourceNotFoundException("Booking not found or already deleted");
+                });
+
+        // Validate customer authorization
         if (!booking.getCustomerId().equals(customerId)) {
+            log.warn("Unauthorized cancellation attempt for booking: {} by customer: {}", request.getBookingId(), customerId);
             throw new UnauthorizedException("Not authorized to cancel this booking");
         }
 
+        // Validate booking state
         if (!booking.canBeCancelled()) {
+            log.warn("Invalid cancellation attempt for booking: {} in state: {}", request.getBookingId(), booking.getStatus());
             throw new InvalidBookingStateException("Booking cannot be cancelled in current state");
         }
 
+        // Update booking status
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancellationReason(request.getReason());
-        booking.setCancellationTime(LocalDateTime.now());
+        booking.setCancellationTime(LocalDateTime.now().format(DATE_FORMATTER));
 
+        // Release resources and handle refund
         releaseBookingResource(booking);
         handleCancellationRefund(booking);
 
-        log.info("Cancelled booking with ID: {} for customer: {}",
-                booking.getBookingId(), booking.getCustomerId());
-        return bookingRepository.save(booking);
+        // Save updated booking
+        bookingRepository.save(booking);
+        log.info("Successfully cancelled booking with ID: {} for customer: {}", booking.getBookingId(), booking.getCustomerId());
+
+        return booking;
     }
 
     private void releaseBookingResource(Booking booking) {
@@ -173,8 +224,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void handleCancellationRefund(Booking booking) {
-        LocalDateTime cancellationDeadline = booking.getPickupDate()
-                .minusHours(CANCELLATION_WINDOW_HOURS);
+        LocalDateTime pickupDateTime = LocalDateTime.parse(booking.getPickupDate(), ISO_FORMATTER);
+        LocalDateTime cancellationDeadline = pickupDateTime.minusHours(CANCELLATION_WINDOW_HOURS);
         if (LocalDateTime.now().isBefore(cancellationDeadline)) {
             booking.setRefundAmount(booking.getTotalAmount());
         } else {
@@ -187,9 +238,9 @@ public class BookingServiceImpl implements BookingService {
 
     @Scheduled(fixedRate = 10000)
     public void checkAndUpdateCarAvailability() {
-        LocalDateTime now = LocalDateTime.now();
+        String currentTime = LocalDateTime.now().format(DATE_FORMATTER);
         List<Booking> activeBookings = bookingRepository.findByStatusAndPickupDateBefore(
-                BookingStatus.CONFIRMED, now);
+                BookingStatus.CONFIRMED, currentTime);
 
         for (Booking booking : activeBookings) {
             updateBookingStatus(booking);
@@ -199,13 +250,26 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void updateBookingStatus(Booking booking) {
-        LocalDateTime pickupTime = booking.getPickupDate();
-        LocalDateTime now = LocalDateTime.now();
+        try {
+            // First try parsing with DATE_FORMATTER
+            LocalDateTime pickupTime;
+            try {
+                pickupTime = LocalDateTime.parse(booking.getPickupDate(), DATE_FORMATTER);
+            } catch (DateTimeParseException e) {
+                // If that fails, try ISO format
+                pickupTime = LocalDateTime.parse(booking.getPickupDate(), ISO_FORMATTER);
+            }
 
-        if (now.isAfter(pickupTime)) {
-            booking.setStatus(BookingStatus.IN_PROGRESS);
-            bookingRepository.save(booking);
-            log.info("Updated booking {} status to IN_PROGRESS", booking.getBookingId());
+            LocalDateTime now = LocalDateTime.now();
+
+            if (now.isAfter(pickupTime)) {
+                booking.setStatus(BookingStatus.IN_PROGRESS);
+                bookingRepository.save(booking);
+                log.info("Updated booking {} status to IN_PROGRESS", booking.getBookingId());
+            }
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse pickup date for booking {}: {}",
+                    booking.getBookingId(), booking.getPickupDate(), e);
         }
     }
 

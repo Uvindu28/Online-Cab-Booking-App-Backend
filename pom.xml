@@ -46,6 +46,12 @@
             <version>1.29.0</version>
         </dependency>
 
+        <dependency>
+            <groupId>com.stripe</groupId>
+            <artifactId>stripe-java</artifactId>
+            <version>22.0.0</version>  <!-- Use the latest version -->
+        </dependency>
+
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

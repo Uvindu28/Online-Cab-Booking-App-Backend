@@ -86,4 +86,21 @@ public class BookingController {
         Booking booking = bookingService.getBookingDetails(customer.getCustomerId(), bookingId);
         return ResponseEntity.ok(booking);
     }
+
+    @DeleteMapping("/delete/{bookingId}")
+    public ResponseEntity<Void> deleteBooking(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String bookingId){
+        String email = userDetails.getUsername();
+        log.info("Deleting booking: {} for customer email: {}", bookingId, email);
+
+        Customer customer = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with email: " + email));
+
+        bookingService.deleteBooking(customer.getCustomerId(), bookingId);
+        return ResponseEntity.noContent().build();
+
+    }
+
+
 }

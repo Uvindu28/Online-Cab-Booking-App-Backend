@@ -1,7 +1,8 @@
-package com.system.megacitycab.service;
+package com.system.megacitycab.serviceImpl;
 
 import java.util.List;
 
+import com.system.megacitycab.service.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -10,7 +11,7 @@ import com.system.megacitycab.model.Admin;
 import com.system.megacitycab.repository.AdminRepository;
 
 @Service
-public class AdminServiceImpl implements AdminService{
+public class AdminServiceImpl implements AdminService {
     @Autowired
     private AdminRepository adminRepository;
 

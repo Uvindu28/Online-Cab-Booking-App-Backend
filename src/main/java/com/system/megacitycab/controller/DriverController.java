@@ -1,12 +1,22 @@
 package com.system.megacitycab.controller;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import com.system.megacitycab.exception.UnauthorizedException;
 import com.system.megacitycab.model.Booking;
+import com.system.megacitycab.model.Car;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -14,7 +24,9 @@ import org.springframework.web.bind.annotation.*;
 
 import com.system.megacitycab.model.Driver;
 import com.system.megacitycab.service.DriverService;
+import org.springframework.web.multipart.MultipartFile;
 
+import javax.print.attribute.standard.Media;
 import javax.swing.text.html.parser.Entity;
 
 @RestController
@@ -35,61 +47,126 @@ public class DriverController {
         return driverService.getDriverById(driverId);
     }
 
-    @PostMapping("/createdriver")
-    public ResponseEntity<?> createDriver(@RequestBody Driver driver) {
-        return driverService.createDriver(driver);
+    @PostMapping(value = "/createdriver",
+    consumes = {MediaType.MULTIPART_FORM_DATA_VALUE},
+    produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createDriver(
+            @RequestParam("driverName") String driverName,
+            @RequestParam("email") String email,
+            @RequestParam("driverLicense") String driverLicense,
+            @RequestParam("phone") String phone,
+            @RequestParam("password") String password,
+            @RequestParam("hasOwnCar") boolean hasOwnCar,
+            @RequestParam(value = "licensePlate", required = false) String licensePlate,
+            @RequestParam(value = "model", required = false) String model,
+            @RequestParam(value = "numberOfSeats", required = false) Integer numberOfSeats,
+            @RequestParam(value = "baseRate", required = false) Double baseRate,
+            @RequestParam(value = "driverRate", required = false) Double driverRate,
+            @RequestParam(value = "carImage", required = false) MultipartFile carImage) {
+
+        try{
+            Driver driver = new Driver();
+            driver.setDriverName(driverName);
+            driver.setEmail(email);
+            driver.setDriverLicense(driverLicense);
+            driver.setPhone(phone);
+            driver.setPassword(password);
+            driver.setHasOwnCar(hasOwnCar);
+
+
+            Car car = new Car();
+            car.setLicensePlate(licensePlate);
+            car.setModel(model);
+            car.setNumberOfSeats(numberOfSeats);
+            car.setBaseRate(baseRate);
+            car.setDriverRate(driverRate);
+
+            if(hasOwnCar){
+                car = new Car();
+                car.setLicensePlate(licensePlate);
+                car.setModel(model);
+                car.setNumberOfSeats(numberOfSeats);
+                car.setBaseRate(baseRate);
+                car.setDriverRate(driverRate);
+                if(carImage != null && !carImage.isEmpty()){
+                    String carImageUrl = handleImageUpload(carImage, "car");
+                    car.setCarImageUrl(carImageUrl);
+                }
+            }
+            return driverService.createDriver(driver, car);
+
+        }catch (Exception e){
+            log.error("Error creating driver: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error creating driver: " + e.getMessage());
+        }
     }
 
     @PutMapping("/updatedriver/{driverId}")
     public ResponseEntity<Driver> updateDriver(
-            @PathVariable String driverId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody Driver driver){
-        log.info("Updating driver with ID: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
-        driver.setDriverId(driverId);
-        Driver updateDriver = driverService.updateDriver(driverId, driver);
-        return ResponseEntity.ok(updateDriver);
+            @PathVariable String driverId,
+            @RequestBody Driver driver) {
+        String email = userDetails.getUsername();
+        log.info("Updating driver with ID: {} for email: {}", driverId, email);
 
+        Driver updatedDriver = driverService.updateDriver(driverId, driver);
+        return ResponseEntity.ok(updatedDriver);
     }
 
     @PutMapping("/{driverId}/availability")
     public ResponseEntity<Driver> updateAvailability(
-            @PathVariable String driverId,
             @AuthenticationPrincipal UserDetails userDetails,
-            @RequestBody Map<String, Boolean> availability){
-        log.info("Updating availability for driver: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @PathVariable String driverId,
+            @RequestBody Map<String, Boolean> availability) {
+        String email = userDetails.getUsername();
+        log.info("Updating availability for driver: {} for email: {}", driverId, email);
+
+        if (!availability.containsKey("availability")) {
+            return ResponseEntity.badRequest().build();
+        }
+
         Driver driver = driverService.updateAvailability(driverId, availability.get("availability"));
         return ResponseEntity.ok(driver);
     }
 
     @GetMapping("/{driverId}/bookings")
     public ResponseEntity<List<Booking>> getDriverBookings(
-            @PathVariable String driverId,
-            @AuthenticationPrincipal UserDetails userDetails){
-        log.info("Fetching bookings for driver: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+        log.info("Fetching bookings for driver: {} for email: {}", driverId, email);
+
         List<Booking> bookings = driverService.getDriverBookings(driverId);
         return ResponseEntity.ok(bookings);
-
     }
 
     @DeleteMapping("/{driverId}")
     public ResponseEntity<Void> deleteDriver(
-            @PathVariable String driverId,
-            @AuthenticationPrincipal UserDetails userDetails){
-        log.info("Deleting driver with ID: {}", driverId);
-        validateDriverAuthorization(userDetails, driverId);
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+        log.info("Deleting driver with ID: {} for email: {}", driverId, email);
+
         driverService.deleteDriver(driverId);
         return ResponseEntity.noContent().build();
     }
 
-    public void validateDriverAuthorization(UserDetails userDetails, String driverId){
-        if(!userDetails.getUsername().equals(driverId)){
-            log.info("Authorization failed: authenticated user {} does not match driver ID {}",
-                    userDetails.getUsername(), driverId);
-            throw new UnauthorizedException("Not authorized to perform this action");
+    private String handleImageUpload(MultipartFile file, String type) throws IOException {
+        String filename = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
+
+        String basePath = type.equals("driver") ? "drivers/" : "cars/";
+        String uploadDir = "uploads/" + basePath;
+
+        File directory = new File(uploadDir);
+        if (!directory.exists()) {
+            directory.mkdirs();
         }
+
+        Path filePath = Paths.get(uploadDir + filename);
+        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+        return basePath + filename;
     }
+
 }

@@ -33,4 +33,6 @@ public class Driver {
 
     private boolean hasOwnCar = false;
 
+    private String profileImage;
+
 }

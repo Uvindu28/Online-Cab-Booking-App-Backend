@@ -31,6 +31,7 @@ public class SecurityConfig{
                  .authorizeHttpRequests(requests -> requests
                          .requestMatchers("/auth/**").permitAll()
                          .requestMatchers("/all/**").permitAll()
+                         .requestMatchers("/cars/createcar").permitAll()
                          .requestMatchers("/cars/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_DRIVER")
                          //Authentication Routes
                          .requestMatchers("/admin/**").hasAuthority("ROLE_ADMIN")

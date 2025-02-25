@@ -8,11 +8,13 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.system.megacitycab.exception.UnauthorizedException;
 import com.system.megacitycab.model.Booking;
 import com.system.megacitycab.model.Car;
+import com.system.megacitycab.model.Customer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -42,14 +44,23 @@ public class DriverController {
         return driverService.getAllDrivers();
     }
 
-    @GetMapping("/getdriver/{id}")
+    @GetMapping("/getdriver/{driverId}")
     public Driver getDriverById(@PathVariable String driverId) {
         return driverService.getDriverById(driverId);
     }
 
+    @GetMapping("/getdriver/{customerId}/profileImage")
+    public ResponseEntity<String> getDriverProfileImage(@PathVariable String driverId) {
+        Driver driver = driverService.getDriverById(driverId);
+        if (driver != null && driver.getProfileImage() != null) {
+            return ResponseEntity.ok(driver.getProfileImage());
+        }
+        return ResponseEntity.notFound().build();
+    }
+
     @PostMapping(value = "/createdriver",
-    consumes = {MediaType.MULTIPART_FORM_DATA_VALUE},
-    produces = MediaType.APPLICATION_JSON_VALUE)
+            consumes = {MediaType.MULTIPART_FORM_DATA_VALUE},
+            produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> createDriver(
             @RequestParam("driverName") String driverName,
             @RequestParam("email") String email,
@@ -62,7 +73,8 @@ public class DriverController {
             @RequestParam(value = "numberOfSeats", required = false) Integer numberOfSeats,
             @RequestParam(value = "baseRate", required = false) Double baseRate,
             @RequestParam(value = "driverRate", required = false) Double driverRate,
-            @RequestParam(value = "carImage", required = false) MultipartFile carImage) {
+            @RequestParam(value = "carImage", required = false) MultipartFile carImage,
+            @RequestParam(value = "profileImage", required = false) MultipartFile profileImage) {
 
         try{
             Driver driver = new Driver();
@@ -73,26 +85,38 @@ public class DriverController {
             driver.setPassword(password);
             driver.setHasOwnCar(hasOwnCar);
 
+            if (profileImage != null && !profileImage.isEmpty()) {
+                String profileImageUrl = handleImageUpload(profileImage, "driver");
+                driver.setProfileImage(profileImageUrl);
+            }
 
-            Car car = new Car();
-            car.setLicensePlate(licensePlate);
-            car.setModel(model);
-            car.setNumberOfSeats(numberOfSeats);
-            car.setBaseRate(baseRate);
-            car.setDriverRate(driverRate);
-
+            Car car = null;
             if(hasOwnCar){
                 car = new Car();
                 car.setLicensePlate(licensePlate);
                 car.setModel(model);
-                car.setNumberOfSeats(numberOfSeats);
-                car.setBaseRate(baseRate);
-                car.setDriverRate(driverRate);
+
+                if (numberOfSeats != null) {
+                    car.setNumberOfSeats(numberOfSeats);
+                } else {
+                    car.setNumberOfSeats(4);
+                }
+
+                if (baseRate != null) {
+                    car.setBaseRate(baseRate);
+                }
+
+                if (driverRate != null) {
+                    car.setDriverRate(driverRate);
+                }
+
                 if(carImage != null && !carImage.isEmpty()){
                     String carImageUrl = handleImageUpload(carImage, "car");
                     car.setCarImageUrl(carImageUrl);
                 }
             }
+            //
+
             return driverService.createDriver(driver, car);
 
         }catch (Exception e){
@@ -128,6 +152,36 @@ public class DriverController {
 
         Driver driver = driverService.updateAvailability(driverId, availability.get("availability"));
         return ResponseEntity.ok(driver);
+    }
+
+    @PutMapping("/{driverId}/uploadProfileImage")
+    public ResponseEntity<?> uploadProfileImage(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId,
+            @RequestParam("profileImage") MultipartFile profileImage) {
+        try {
+            String email = userDetails.getUsername();
+            log.info("Uploading profile image for driver: {} (User: {})", driverId, email);
+
+            Optional<Driver> driverOpt = Optional.ofNullable(driverService.getDriverById(driverId));
+            if (!driverOpt.isPresent()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Driver not found");
+            }
+
+            Driver driver = driverOpt.get();
+            if (profileImage != null && !profileImage.isEmpty()) {
+                String profileImageUrl = handleImageUpload(profileImage, "driver");
+                driver.setProfileImage(profileImageUrl);
+                driverService.updateDriver(driverId, driver);
+            }
+
+            return ResponseEntity.ok("Profile image uploaded successfully");
+
+        } catch (Exception e) {
+            log.error("Error uploading profile image: ", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error uploading profile image: " + e.getMessage());
+        }
     }
 
     @GetMapping("/{driverId}/bookings")

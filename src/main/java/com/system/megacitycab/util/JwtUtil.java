@@ -74,7 +74,7 @@ public class JwtUtil {
     }
 
     public String extractEmail(String token) {
-        return extractClaim(token, Claims::getSubject);  // Assuming subject contains email
+        return extractClaim(token, Claims::getSubject);
     }
 
     public String extractRole(String token) {

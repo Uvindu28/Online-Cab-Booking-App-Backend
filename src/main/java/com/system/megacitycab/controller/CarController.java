@@ -32,7 +32,7 @@ public class CarController {
         return carService.getCarById(carId);
     }
 
-    @PostMapping("/cars/createcar")
+    @PostMapping("/auth/cars/createcar")
     public ResponseEntity<Car> createCar(@RequestParam String licensePlate,
                                          @RequestParam String model,
                                          @RequestParam int numberOfSeats,
@@ -49,13 +49,13 @@ public class CarController {
         return ResponseEntity.ok(savedCar);
     }
 
-    @PutMapping("/cars/updatecar/{carId}")
+    @PutMapping("/auth/cars/updatecar/{carId}")
     public ResponseEntity<Car> updateCar(@PathVariable("carId") String carId, @RequestBody Car car){
         Car updateCar = carService.updateCar(carId, car);
         return ResponseEntity.ok(updateCar);
     }
 
-    @DeleteMapping("/cars/deletecar/{carId}")
+    @DeleteMapping("/auth/cars/deletecar/{carId}")
     public void deleteCar(@PathVariable("carId") String carId){
         carService.deleteCar(carId);
     }

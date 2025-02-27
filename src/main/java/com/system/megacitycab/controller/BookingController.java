@@ -19,7 +19,7 @@ import java.util.List;
 
 @RestController
 @CrossOrigin(origins = "*")
-@RequestMapping(value = "/bookings")
+@RequestMapping(value = "/auth/bookings")
 @Slf4j
 public class BookingController {
 
@@ -28,6 +28,11 @@ public class BookingController {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @GetMapping("/getallbookings")
+    public ResponseEntity<List<Booking>> getAllBookings(){
+        return ResponseEntity.ok(bookingService.getAllBookings());
+    }
 
     @PostMapping("/createbooking")
     public ResponseEntity<Booking> createBooking(
@@ -60,7 +65,7 @@ public class BookingController {
         return ResponseEntity.ok(cancelledBooking);
     }
 
-    @GetMapping("/getallbookings")
+    @GetMapping("/getallcustomerbookings")
     public ResponseEntity<List<Booking>> getCustomerBookings(
             @AuthenticationPrincipal UserDetails userDetails) {
         String email = userDetails.getUsername();

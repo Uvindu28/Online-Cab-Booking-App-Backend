@@ -69,7 +69,7 @@ public class DriverController {
             @RequestParam(value = "baseRate", required = false) Double baseRate,
             @RequestParam(value = "driverRate", required = false) Double driverRate,
             @RequestParam(value = "carImage", required = false) MultipartFile carImage,
-            @RequestParam(value = "profileImage", required = false) MultipartFile profileImage) {
+            @RequestParam(value = "profileImage") MultipartFile profileImage) {
 
         try{
             Driver driver = new Driver();
@@ -110,7 +110,6 @@ public class DriverController {
                     car.setCarImageUrl(carImageUrl);
                 }
             }
-            //
 
             return driverService.createDriver(driver, car);
 

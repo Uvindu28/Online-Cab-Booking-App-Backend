@@ -58,7 +58,7 @@ public class CustomerController {
                                             @RequestParam("nic") String nic,
                                             @RequestParam("phone") String phone,
                                             @RequestParam("password") String password,
-                                            @RequestParam(value = "profileImage", required = false) MultipartFile profileImage) {
+                                            @RequestParam(value = "profileImage") MultipartFile profileImage) {
         try {
 
             Customer customer = new Customer();

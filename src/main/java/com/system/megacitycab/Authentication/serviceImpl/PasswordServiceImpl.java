@@ -62,39 +62,45 @@ public class PasswordServiceImpl implements PasswordService {
     public ResponseEntity<?> resetPassword(String email, String otp, String newPassword) {
         Optional<OtpStorage> otpStorageOpt = otpStorageRepository.findByEmail(email);
 
-        if(!otpStorageOpt.isPresent()){
+        if (!otpStorageOpt.isPresent()) {
+            System.out.println("No OTP request found for email: " + email);
             return ResponseEntity.badRequest().body("No OTP request found");
         }
-    
+
         OtpStorage otpStorage = otpStorageOpt.get();
 
-        if(Instant.now().isAfter(otpStorage.getExpiryTime())){
+        if (Instant.now().isAfter(otpStorage.getExpiryTime())) {
+            System.out.println("OTP expired for email: " + email);
             otpStorageRepository.deleteByEmail(email);
             return ResponseEntity.badRequest().body("OTP has expired");
         }
 
-        if(!otpStorage.getOtp().equals(otp)){
+        if (!otpStorage.getOtp().equals(otp)) {
+            System.out.println("Invalid OTP for email: " + email);
             return ResponseEntity.badRequest().body("Invalid OTP");
         }
 
-        if(!isValidPassword(newPassword)){
+        if (!isValidPassword(newPassword)) {
+            System.out.println("Invalid password for email: " + email);
             return ResponseEntity.badRequest().body("Password must be at least 8 characters long, include a number, and an uppercase letter.");
-
         }
 
         customerRepository.findByEmail(email).ifPresent(customer -> {
             customer.setPassword(passwordEncoder.encode(newPassword));
             customerRepository.save(customer);
+            System.out.println("Password updated for customer: " + email);
         });
 
         driverRepository.findByEmail(email).ifPresent(driver -> {
             driver.setPassword(passwordEncoder.encode(newPassword));
             driverRepository.save(driver);
+            System.out.println("Password updated for driver: " + email);
         });
 
         otpStorageRepository.deleteByEmail(email);
+        System.out.println("OTP deleted for email: " + email);
 
-        return ResponseEntity.ok("Password update successfully");
+        return ResponseEntity.ok("Password updated successfully");
     }
 
     private String generateOTP(){

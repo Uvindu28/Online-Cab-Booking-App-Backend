@@ -30,7 +30,7 @@ public class BookingController {
     private CustomerRepository customerRepository;
 
     @GetMapping("/getallbookings")
-    public ResponseEntity<List<Booking>> getAllBookings(){
+    public ResponseEntity<List<Booking>> getAllBookings() {
         return ResponseEntity.ok(bookingService.getAllBookings());
     }
 
@@ -95,7 +95,7 @@ public class BookingController {
     @DeleteMapping("/delete/{bookingId}")
     public ResponseEntity<Void> deleteBooking(
             @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable String bookingId){
+            @PathVariable String bookingId) {
         String email = userDetails.getUsername();
         log.info("Deleting booking: {} for customer email: {}", bookingId, email);
 
@@ -104,8 +104,5 @@ public class BookingController {
 
         bookingService.deleteBooking(customer.getCustomerId(), bookingId);
         return ResponseEntity.noContent().build();
-
     }
-
-
 }

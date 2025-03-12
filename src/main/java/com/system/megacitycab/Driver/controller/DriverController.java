@@ -13,6 +13,7 @@ import java.util.UUID;
 
 import com.system.megacitycab.Booking.model.Booking;
 import com.system.megacitycab.Car.model.Car;
+import com.system.megacitycab.Cloudinary.CloudinaryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,9 @@ public class DriverController {
     @Autowired
     private DriverService driverService;
 
+    @Autowired
+    private CloudinaryService cloudinaryService;
+
     @GetMapping("/getalldrivers")
     public List<Driver> getAllDrivers() {
         return driverService.getAllDrivers();
@@ -42,15 +46,6 @@ public class DriverController {
     @GetMapping("/getdriver/{driverId}")
     public Driver getDriverById(@PathVariable String driverId) {
         return driverService.getDriverById(driverId);
-    }
-
-    @GetMapping("/getdriver/{customerId}/profileImage")
-    public ResponseEntity<String> getDriverProfileImage(@PathVariable String driverId) {
-        Driver driver = driverService.getDriverById(driverId);
-        if (driver != null && driver.getProfileImage() != null) {
-            return ResponseEntity.ok(driver.getProfileImage());
-        }
-        return ResponseEntity.notFound().build();
     }
 
     @PostMapping(value = "/createdriver",
@@ -81,7 +76,7 @@ public class DriverController {
             driver.setHasOwnCar(hasOwnCar);
 
             if (profileImage != null && !profileImage.isEmpty()) {
-                String profileImageUrl = handleImageUpload(profileImage, "driver");
+                String profileImageUrl = cloudinaryService.uploadImage(profileImage);
                 driver.setProfileImage(profileImageUrl);
             }
 
@@ -106,7 +101,7 @@ public class DriverController {
                 }
 
                 if(carImage != null && !carImage.isEmpty()){
-                    String carImageUrl = handleImageUpload(carImage, "car");
+                    String carImageUrl = cloudinaryService.uploadImage(carImage);
                     car.setCarImageUrl(carImageUrl);
                 }
             }
@@ -148,42 +143,22 @@ public class DriverController {
         return ResponseEntity.ok(driver);
     }
 
-    @PutMapping("/{driverId}/uploadProfileImage")
-    public ResponseEntity<?> uploadProfileImage(
-            @AuthenticationPrincipal UserDetails userDetails,
-            @PathVariable String driverId,
-            @RequestParam("profileImage") MultipartFile profileImage) {
-        try {
-            String email = userDetails.getUsername();
-            log.info("Uploading profile image for driver: {} (User: {})", driverId, email);
-
-            Optional<Driver> driverOpt = Optional.ofNullable(driverService.getDriverById(driverId));
-            if (!driverOpt.isPresent()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Driver not found");
-            }
-
-            Driver driver = driverOpt.get();
-            if (profileImage != null && !profileImage.isEmpty()) {
-                String profileImageUrl = handleImageUpload(profileImage, "driver");
-                driver.setProfileImage(profileImageUrl);
-                driverService.updateDriver(driverId, driver);
-            }
-
-            return ResponseEntity.ok("Profile image uploaded successfully");
-
-        } catch (Exception e) {
-            log.error("Error uploading profile image: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error uploading profile image: " + e.getMessage());
-        }
-    }
-
     @GetMapping("/{driverId}/bookings")
     public ResponseEntity<List<Booking>> getDriverBookings(
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable String driverId) {
         String email = userDetails.getUsername();
         log.info("Fetching bookings for driver: {} for email: {}", driverId, email);
+
+        // Debug: Log the authenticated user and driver details
+        log.info("Authenticated user: {}", email);
+        Driver driver = driverService.getDriverById(driverId);
+        log.info("Driver email: {}", driver.getEmail());
+
+        if (!email.equals(driver.getEmail())) {
+            log.warn("Unauthorized access attempt by user: {}", email);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
 
         List<Booking> bookings = driverService.getDriverBookings(driverId);
         return ResponseEntity.ok(bookings);
@@ -198,23 +173,6 @@ public class DriverController {
 
         driverService.deleteDriver(driverId);
         return ResponseEntity.noContent().build();
-    }
-
-    private String handleImageUpload(MultipartFile file, String type) throws IOException {
-        String filename = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
-
-        String basePath = type.equals("driver") ? "drivers/" : "cars/";
-        String uploadDir = "uploads/" + basePath;
-
-        File directory = new File(uploadDir);
-        if (!directory.exists()) {
-            directory.mkdirs();
-        }
-
-        Path filePath = Paths.get(uploadDir + filename);
-        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-        return basePath + filename;
     }
 
 }

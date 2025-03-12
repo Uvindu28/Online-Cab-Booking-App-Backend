@@ -30,6 +30,8 @@ public class Booking {
 
     private String pickupDate;
 
+    private String pickupTime;
+
     private double totalAmount;
 
     private double tax;

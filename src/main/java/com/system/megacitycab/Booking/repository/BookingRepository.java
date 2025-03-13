@@ -15,6 +15,7 @@ public interface BookingRepository extends MongoRepository<Booking, String> {
     List<Booking> findByDriverId(String driverId);
     List<Booking> findByStatusAndPickupDateBefore(BookingStatus status, String dateTime);
     List<Booking> findByCarIdAndStatus(String carId, BookingStatus status);
+    List<Booking> findByDriverIdIsNullAndStatus(BookingStatus status);
 
     @Query("{'carId': ?0, 'pickupDate': {$gte: ?1, $lte: ?2}, 'status': {$in: ['CONFIRMED','IN_PROGRESS']}}")
     List<Booking> findOverlappingBookings(String carId, LocalDateTime start, LocalDateTime end);

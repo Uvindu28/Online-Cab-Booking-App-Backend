@@ -35,6 +35,7 @@ public class JwtUtil {
 
     @Value("${app.secret}")
     private String secret;
+
     @Autowired
     private DriverRepository driverRepository;
 

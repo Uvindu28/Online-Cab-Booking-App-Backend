@@ -36,6 +36,7 @@ public class CarController {
     public ResponseEntity<Car> createCar(@RequestParam String licensePlate,
                                          @RequestParam String model,
                                          @RequestParam int numberOfSeats,
+                                         @RequestParam String categoryId,
                                          @RequestParam MultipartFile carImage) throws IOException {
         String imageUrl = cloudinaryService.uploadImage(carImage);
 

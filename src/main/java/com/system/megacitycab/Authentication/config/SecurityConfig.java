@@ -31,13 +31,12 @@ public class SecurityConfig{
                  .authorizeHttpRequests(requests -> requests
                          .requestMatchers("/auth/**").permitAll()
                          .requestMatchers("/all/**").permitAll()
-                         .requestMatchers("/cars/createcar").permitAll()
                          .requestMatchers("/cars/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_DRIVER")
                          //Authentication Routes
                          .requestMatchers("/admin/**").hasAuthority("ROLE_ADMIN")
                          .requestMatchers("/driver/**").hasAuthority("ROLE_DRIVER")
                          .requestMatchers("/customer/**").hasAuthority("ROLE_CUSTOMER")
-                         .requestMatchers("/bookings/**").hasAuthority("ROLE_ADMIN")
+                         .requestMatchers("/bookings/**").hasAnyAuthority("ROLE_ADMIN", "ROLE_CUSTOMER")
                          .anyRequest().authenticated())
                  .sessionManagement(management -> management.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 

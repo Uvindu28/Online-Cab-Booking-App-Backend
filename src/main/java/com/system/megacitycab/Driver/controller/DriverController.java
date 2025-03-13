@@ -1,19 +1,15 @@
 package com.system.megacitycab.Driver.controller;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.stream.Collectors;
 
 import com.system.megacitycab.Booking.model.Booking;
 import com.system.megacitycab.Car.model.Car;
 import com.system.megacitycab.Cloudinary.CloudinaryService;
+import com.system.megacitycab.Customer.model.Customer;
+import com.system.megacitycab.Customer.repository.CustomerRepository;
+import com.system.megacitycab.exception.ResourceNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -22,10 +18,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.system.megacitycab.Driver.model.Driver;
 import com.system.megacitycab.Driver.service.DriverService;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @CrossOrigin(origins = "*")
@@ -38,6 +34,9 @@ public class DriverController {
     @Autowired
     private CloudinaryService cloudinaryService;
 
+    @Autowired
+    private CustomerRepository customerRepository;
+
     @GetMapping("/getalldrivers")
     public List<Driver> getAllDrivers() {
         return driverService.getAllDrivers();
@@ -45,7 +44,7 @@ public class DriverController {
 
     @GetMapping("/getdriver/{driverId}")
     public Driver getDriverById(@PathVariable String driverId) {
-        return driverService.getDriverById(driverId);
+        return driverService.getDriverById(driverId); // Ensure Car is included in the response
     }
 
     @PostMapping(value = "/createdriver",
@@ -66,7 +65,7 @@ public class DriverController {
             @RequestParam(value = "carImage", required = false) MultipartFile carImage,
             @RequestParam(value = "profileImage") MultipartFile profileImage) {
 
-        try{
+        try {
             Driver driver = new Driver();
             driver.setDriverName(driverName);
             driver.setEmail(email);
@@ -81,26 +80,14 @@ public class DriverController {
             }
 
             Car car = null;
-            if(hasOwnCar){
+            if (hasOwnCar) {
                 car = new Car();
                 car.setLicensePlate(licensePlate);
                 car.setModel(model);
-
-                if (numberOfSeats != null) {
-                    car.setNumberOfSeats(numberOfSeats);
-                } else {
-                    car.setNumberOfSeats(4);
-                }
-
-                if (baseRate != null) {
-                    car.setBaseRate(baseRate);
-                }
-
-                if (driverRate != null) {
-                    car.setDriverRate(driverRate);
-                }
-
-                if(carImage != null && !carImage.isEmpty()){
+                car.setNumberOfSeats(numberOfSeats != null ? numberOfSeats : 4);
+                car.setBaseRate(baseRate != null ? baseRate : 0.0);
+                car.setDriverRate(driverRate != null ? driverRate : 0.0);
+                if (carImage != null && !carImage.isEmpty()) {
                     String carImageUrl = cloudinaryService.uploadImage(carImage);
                     car.setCarImageUrl(carImageUrl);
                 }
@@ -108,7 +95,7 @@ public class DriverController {
 
             return driverService.createDriver(driver, car);
 
-        }catch (Exception e){
+        } catch (Exception e) {
             log.error("Error creating driver: ", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Error creating driver: " + e.getMessage());
@@ -150,17 +137,22 @@ public class DriverController {
         String email = userDetails.getUsername();
         log.info("Fetching bookings for driver: {} for email: {}", driverId, email);
 
-        // Debug: Log the authenticated user and driver details
-        log.info("Authenticated user: {}", email);
         Driver driver = driverService.getDriverById(driverId);
-        log.info("Driver email: {}", driver.getEmail());
-
         if (!email.equals(driver.getEmail())) {
             log.warn("Unauthorized access attempt by user: {}", email);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        List<Booking> bookings = driverService.getDriverBookings(driverId);
+        List<Booking> bookings = driverService.getDriverBookings(driverId).stream()
+                .map(booking -> {
+                    Customer customer = customerRepository.findById(booking.getCustomerId())
+                            .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+                    booking.setPassengerName(customer.getName());
+                    booking.setPassengerImage(customer.getProfileImage());
+                    booking.setPassengerRating(customer.getRating() != null ? customer.getRating() : 0.0);
+                    return booking;
+                })
+                .collect(Collectors.toList());
         return ResponseEntity.ok(bookings);
     }
 
@@ -174,5 +166,4 @@ public class DriverController {
         driverService.deleteDriver(driverId);
         return ResponseEntity.noContent().build();
     }
-
 }

@@ -1,16 +1,16 @@
 package com.system.megacitycab.Driver.model;
 
-import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.mapping.Document;
-
+import com.system.megacitycab.Car.model.Car;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "drivers")
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 public class Driver {
     @Id
     private String driverId;
@@ -19,20 +19,19 @@ public class Driver {
 
     private String email;
 
-    private String phone;
-
     private String driverLicense;
+
+    private String phone;
 
     private String password;
 
-    private boolean available = true;
-
-    private String role = "DRIVER";
-
-    private String carId;
-
-    private boolean hasOwnCar = false;
-
     private String profileImage;
 
+    private boolean hasOwnCar;
+
+    private String carId; // Reference to the driver's car
+
+    private boolean available = true; // For availability status (used in /availability endpoint)
+
+    private String role = "DRIVER";
 }

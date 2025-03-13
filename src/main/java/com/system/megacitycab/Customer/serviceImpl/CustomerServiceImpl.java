@@ -57,6 +57,7 @@ public class CustomerServiceImpl implements CustomerService {
                 exitCustomer.setName(customer.getName());
                 exitCustomer.setAddress(customer.getAddress());
                 exitCustomer.setPhone(customer.getPhone());
+                exitCustomer.setProfileImage(customer.getProfileImage());
                 return customerRepository.save(customer);
             })
             .orElseThrow(() -> new RuntimeException("Customer not found"));

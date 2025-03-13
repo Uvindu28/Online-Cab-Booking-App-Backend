@@ -80,7 +80,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setPickupTime(request.getPickupTime());
         booking.setBookingDate(LocalDateTime.now().format(DATE_FORMATTER));
         booking.setDriverRequired(request.isDriverRequired());
-        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setStatus(BookingStatus.PENDING); // Changed from CONFIRMED to PENDING
         booking.setTotalAmount(calculateBookingAmount(car, request));
 
         if (request.isDriverRequired()) {
@@ -90,6 +90,19 @@ public class BookingServiceImpl implements BookingService {
 
         log.info("Created new booking with ID: {} for customer: {}",
                 booking.getBookingId(), booking.getCustomerId());
+        return bookingRepository.save(booking);
+    }
+
+    @Override
+    public Booking confirmBooking(String bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found with id: " + bookingId));
+
+        if (booking.getStatus() != BookingStatus.PENDING) {
+            throw new IllegalStateException("Booking can only be confirmed from PENDING status.");
+        }
+
+        booking.setStatus(BookingStatus.CONFIRMED);
         return bookingRepository.save(booking);
     }
 
@@ -229,11 +242,10 @@ public class BookingServiceImpl implements BookingService {
     @Scheduled(fixedRate = 1000)
     @Transactional
     public void checkAndUpdateCarAvailability() {
-        // Adjust to Sri Lanka timezone
         ZoneId sriLankaZoneId = ZoneId.of("Asia/Colombo");
-        LocalDateTime now = LocalDateTime.now(sriLankaZoneId);  // Current time in Sri Lanka timezone
+        LocalDateTime now = LocalDateTime.now(sriLankaZoneId);
         LocalDate today = now.toLocalDate();
-        LocalTime currentTime = now.toLocalTime().truncatedTo(ChronoUnit.SECONDS); // Truncate milliseconds
+        LocalTime currentTime = now.toLocalTime().truncatedTo(ChronoUnit.SECONDS);
 
         List<Booking> activeBookings = bookingRepository.findByStatusAndPickupDateBefore(
                 BookingStatus.CONFIRMED, now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
@@ -241,7 +253,6 @@ public class BookingServiceImpl implements BookingService {
         for (Booking booking : activeBookings) {
             LocalDateTime pickupDateTime = parsePickupDate(booking.getPickupDate());
             if (pickupDateTime.isBefore(now)) {
-                // Update the car availability status to "Unavailable"
                 String carId = booking.getCarId();
                 Optional<Car> car = carRepository.findById(carId);
                 car.ifPresent(c -> {
@@ -249,7 +260,6 @@ public class BookingServiceImpl implements BookingService {
                     carRepository.save(c);
                 });
 
-                // Optionally, update the booking status if needed
                 updateBookingStatus(booking);
             }
         }
@@ -301,5 +311,11 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return booking;
+    }
+
+    @Override
+    public List<Booking> getAvailableBookings() {
+        // Return bookings that are PENDING and have no assigned driver
+        return bookingRepository.findByDriverIdIsNullAndStatus(BookingStatus.PENDING);
     }
 }

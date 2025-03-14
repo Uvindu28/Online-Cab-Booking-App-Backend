@@ -30,5 +30,5 @@ public class Car {
 
     private double driverRate;
 
-    private String categoryId;
+    private String category;
 }

@@ -1,6 +1,5 @@
 package com.system.megacitycab.Driver.model;
 
-import com.system.megacitycab.Car.model.Car;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

@@ -33,17 +33,24 @@ public class CarController {
     }
 
     @PostMapping("/auth/cars/createcar")
-    public ResponseEntity<Car> createCar(@RequestParam String licensePlate,
-                                         @RequestParam String model,
-                                         @RequestParam int numberOfSeats,
-                                         @RequestParam String categoryId,
-                                         @RequestParam MultipartFile carImage) throws IOException {
+    public ResponseEntity<Car> createCar(
+            @RequestParam String licensePlate,
+            @RequestParam String model,
+            @RequestParam int numberOfSeats,
+            @RequestParam double baseRate, // Add baseRate
+            @RequestParam double driverRate, // Add driverRate
+            @RequestParam String category,
+            @RequestParam MultipartFile carImage) throws IOException {
+
         String imageUrl = cloudinaryService.uploadImage(carImage);
 
         Car car = new Car();
         car.setLicensePlate(licensePlate);
         car.setModel(model);
         car.setNumberOfSeats(numberOfSeats);
+        car.setBaseRate(baseRate); // Set baseRate
+        car.setDriverRate(driverRate); // Set driverRate
+        car.setCategory(category);
         car.setCarImageUrl(imageUrl);
 
         Car savedCar = carService.createCar(car);

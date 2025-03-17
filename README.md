@@ -57,17 +57,17 @@ The backend will start running on `http://localhost:8080`.
 
 ## API Endpoints
 ### User Authentication:
-- **POST** `/api/auth/signup` - Register a new user.
-- **POST** `/api/auth/login` - Authenticate and generate a JWT token.
+- **POST** `/auth/signup` - Register a new user.
+- **POST** `/auth/login` - Authenticate and generate a JWT token.
 
 ### Cab Booking:
-- **GET** `/api/cabs` - Get available cabs.
-- **POST** `/api/bookings` - Book a cab.
-- **GET** `/api/bookings/{id}` - Get booking details.
+- **GET** `/all/cabs` - Get available cabs.
+- **POST** `/ath/bookings` - Book a cab.
+- **GET** `/auth/bookings/{id}` - Get booking details.
 
 ### Admin:
-- **POST** `/api/admin/cabs` - Add a new cab (Admin only).
-- **DELETE** `/api/admin/cabs/{id}` - Remove a cab (Admin only).
+- **POST** `/auth/admin/cabs` - Add a new cab (Admin only).
+- **DELETE** `/auth/admin/cabs/{id}` - Remove a cab (Admin only).
 
 For a complete list of endpoints, refer to the Swagger documentation.
 

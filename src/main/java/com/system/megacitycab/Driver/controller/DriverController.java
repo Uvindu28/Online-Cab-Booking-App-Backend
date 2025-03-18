@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.system.megacitycab.Booking.model.Booking;
+import com.system.megacitycab.Booking.service.BookingService;
 import com.system.megacitycab.Car.model.Car;
 import com.system.megacitycab.Cloudinary.CloudinaryService;
 import com.system.megacitycab.Customer.model.Customer;
@@ -37,14 +38,28 @@ public class DriverController {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private BookingService bookingService;
+
     @GetMapping("/getalldrivers")
     public List<Driver> getAllDrivers() {
         return driverService.getAllDrivers();
     }
 
     @GetMapping("/getdriver/{driverId}")
-    public Driver getDriverById(@PathVariable String driverId) {
-        return driverService.getDriverById(driverId); // Ensure Car is included in the response
+    public ResponseEntity<Driver> getDriverById(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+
+        // Check if the user has a booking with this driver
+        boolean hasBooking = bookingService.hasBookingWithDriver(email, driverId);
+        if (!hasBooking) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        Driver driver = driverService.getDriverById(driverId);
+        return ResponseEntity.ok(driver);
     }
 
     @PostMapping(value = "/createdriver",

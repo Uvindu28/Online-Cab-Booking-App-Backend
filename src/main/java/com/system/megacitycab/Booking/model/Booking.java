@@ -1,6 +1,7 @@
 package com.system.megacitycab.Booking.model;
 
 import com.system.megacitycab.Booking.Enum.BookingStatus;
+import com.system.megacitycab.Driver.model.Driver;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -17,6 +18,8 @@ public class Booking {
     private String bookingId;
 
     private String customerId;
+
+    private String customerEmail;
 
     private String carId;
 
@@ -58,6 +61,9 @@ public class Booking {
     private boolean refundIssued = false;
 
     private double refundAmount;
+
+    @Transient
+    private Driver driverDetails;
 
     public boolean canBeCancelled() {
         return status == BookingStatus.PENDING || status == BookingStatus.CONFIRMED;

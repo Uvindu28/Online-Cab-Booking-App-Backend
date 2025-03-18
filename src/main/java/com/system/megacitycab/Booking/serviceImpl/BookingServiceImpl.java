@@ -1,11 +1,14 @@
 package com.system.megacitycab.Booking.serviceImpl;
 
+import com.system.megacitycab.Authentication.service.EmailService;
 import com.system.megacitycab.Booking.Enum.BookingStatus;
 import com.system.megacitycab.Booking.model.Booking;
 import com.system.megacitycab.Booking.dto.BookingRequest;
 import com.system.megacitycab.Booking.dto.CancellationRequest;
 import com.system.megacitycab.Car.model.Car;
+import com.system.megacitycab.Customer.model.Customer;
 import com.system.megacitycab.Driver.model.Driver;
+import com.system.megacitycab.Driver.service.DriverService;
 import com.system.megacitycab.exception.InvalidBookingException;
 import com.system.megacitycab.exception.InvalidBookingStateException;
 import com.system.megacitycab.exception.ResourceNotFoundException;
@@ -48,6 +51,15 @@ public class BookingServiceImpl implements BookingService {
     @Autowired
     private DriverRepository driverRepository;
 
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private DriverService driverService;
+
     private static final int CANCELLATION_WINDOW_HOURS = 24;
     private static final double CANCELLATION_FEE_PERCENTAGE = 0.1;
 
@@ -80,7 +92,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setPickupTime(request.getPickupTime());
         booking.setBookingDate(LocalDateTime.now().format(DATE_FORMATTER));
         booking.setDriverRequired(request.isDriverRequired());
-        booking.setStatus(BookingStatus.PENDING); // Changed from CONFIRMED to PENDING
+        booking.setStatus(BookingStatus.PENDING);
         booking.setTotalAmount(calculateBookingAmount(car, request));
 
         if (request.isDriverRequired()) {
@@ -88,9 +100,19 @@ public class BookingServiceImpl implements BookingService {
         }
         carRepository.save(car);
 
+        Booking savedBooking = bookingRepository.save(booking);
+
+        if (booking.isDriverRequired()) {
+            Driver driver = driverService.getDriverById(booking.getDriverId());
+            savedBooking.setDriverDetails(driver);
+        }
+
+        // Send email confirmation to customer
+        sendBookingConfirmationEmail(savedBooking);
+
         log.info("Created new booking with ID: {} for customer: {}",
                 booking.getBookingId(), booking.getCustomerId());
-        return bookingRepository.save(booking);
+        return savedBooking;
     }
 
     @Override
@@ -103,8 +125,15 @@ public class BookingServiceImpl implements BookingService {
         }
 
         booking.setStatus(BookingStatus.CONFIRMED);
-        return bookingRepository.save(booking);
+        Booking confirmedBooking = bookingRepository.save(booking);
+
+        // Send confirmation email when booking is confirmed
+        sendBookingStatusUpdateEmail(confirmedBooking, "Booking Confirmed");
+
+        return confirmedBooking;
     }
+
+
 
     @Override
     public void deleteBooking(String customerId, String bookingId) {
@@ -122,6 +151,9 @@ public class BookingServiceImpl implements BookingService {
         releaseBookingResource(booking);
         bookingRepository.delete(booking);
         log.info("Deleted booking with ID: {} for customer: {}", bookingId, customerId);
+    }
+    public boolean hasBookingWithDriver(String customerEmail, String driverId) {
+        return bookingRepository.existsByCustomerEmailAndDriverId(customerEmail, driverId);
     }
 
     private boolean isCarAvailableForTime(Car car, String requestedTime) {
@@ -203,6 +235,10 @@ public class BookingServiceImpl implements BookingService {
         handleCancellationRefund(booking);
 
         bookingRepository.save(booking);
+
+        // Send cancellation email
+        sendBookingStatusUpdateEmail(booking, "Booking Cancelled");
+
         log.info("Successfully cancelled booking with ID: {} for customer: {}", booking.getBookingId(), booking.getCustomerId());
         return booking;
     }
@@ -295,6 +331,129 @@ public class BookingServiceImpl implements BookingService {
             }
         }
     }
+    private void sendBookingConfirmationEmail(Booking booking) {
+        try {
+            Customer customer = customerRepository.findById(booking.getCustomerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+            Car car = carRepository.findById(booking.getCarId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Car not found"));
+
+            String subject = "MegaCityCab - Booking Confirmation #" + booking.getBookingId();
+            String emailBody = generateBookingEmailBody(booking, customer, car);
+
+            emailService.sendHtmlEmail(customer.getEmail(), subject, emailBody);
+            log.info("Booking confirmation email sent to customer: {}", customer.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send booking confirmation email: {}", e.getMessage(), e);
+        }
+    }
+
+    private void sendBookingStatusUpdateEmail(Booking booking, String statusMessage) {
+        try {
+            Customer customer = customerRepository.findById(booking.getCustomerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+            String subject = "MegaCityCab - " + statusMessage + " #" + booking.getBookingId();
+            StringBuilder emailBody = new StringBuilder();
+
+            emailBody.append("Dear ").append(customer.getName()).append(",\n\n");
+            emailBody.append("Your booking with ID: ").append(booking.getBookingId()).append(" has been ").append(statusMessage.toLowerCase()).append(".\n\n");
+
+            if (booking.getStatus() == BookingStatus.CANCELLED && booking.getRefundAmount() > 0) {
+                emailBody.append("A refund of $").append(booking.getRefundAmount()).append(" will be processed to your original payment method.\n\n");
+            }
+
+            emailBody.append("If you have any questions, please contact our customer service team.\n");
+            emailBody.append("Phone: +94 11 123 4567\n");
+            emailBody.append("Email: support@megacitycab.com\n\n");
+
+            emailBody.append("Thank you for choosing MegaCityCab!\n");
+
+            emailService.sendHtmlEmail(customer.getEmail(), subject, emailBody.toString());
+            log.info("Booking status update email sent to customer: {}", customer.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send booking status update email: {}", e.getMessage(), e);
+        }
+    }
+
+    private String generateBookingEmailBody(Booking booking, Customer customer, Car car) {
+        StringBuilder emailBody = new StringBuilder();
+
+        emailBody.append("<html>")
+                .append("<head>")
+                .append("<style>")
+                .append("body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }")
+                .append(".container { width: 100%; padding: 20px; }")
+                .append(".content { max-width: 600px; margin: auto; background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); }")
+                .append(".header { text-align: center; padding: 10px 0; }")
+                .append(".header img { width: 150px; }")
+                .append(".details { margin: 20px 0; }")
+                .append(".details h2 { background-color: #007BFF; color: #ffffff; padding: 10px; border-radius: 5px; }")
+                .append(".details p { margin: 5px 0; }")
+                .append(".invoice { background-color: #f9f9f9; padding: 20px; border-radius: 10px; }")
+                .append(".invoice table { width: 100%; border-collapse: collapse; }")
+                .append(".invoice th, .invoice td { padding: 10px; border-bottom: 1px solid #dddddd; }")
+                .append(".invoice th { text-align: left; background-color: #007BFF; color: #ffffff; }")
+                .append(".total { text-align: right; font-weight: bold; }")
+                .append(".footer { text-align: center; margin-top: 20px; font-size: 12px; color: #888888; }")
+                .append("</style>")
+                .append("</head>")
+                .append("<body>")
+                .append("<div class='container'>")
+                .append("<div class='content'>")
+                .append("<div class='header'>")
+                .append("<img src='https://www.megacitycab.com/logo.png' alt='MegaCityCab Logo' />")
+                .append("<h1>Booking Confirmation</h1>")
+                .append("</div>")
+                .append("<p>Dear ").append(customer.getName()).append(",</p>")
+                .append("<p>Thank you for choosing MegaCityCab. Your booking has been confirmed with the following details:</p>")
+                .append("<div class='details'>")
+                .append("<h2>Booking Details</h2>")
+                .append("<p><strong>Booking ID:</strong> ").append(booking.getBookingId()).append("</p>")
+                .append("<p><strong>Booking Date:</strong> ").append(booking.getBookingDate()).append("</p>")
+                .append("<p><strong>Pickup Location:</strong> ").append(booking.getPickupLocation()).append("</p>")
+                .append("<p><strong>Destination:</strong> ").append(booking.getDestination()).append("</p>")
+                .append("<p><strong>Pickup Date:</strong> ").append(booking.getPickupDate()).append("</p>")
+                .append("<p><strong>Pickup Time:</strong> ").append(booking.getPickupTime()).append("</p>")
+                .append("</div>")
+                .append("<div class='details'>")
+                .append("<h2>Vehicle Details</h2>")
+                .append("<p><strong>Car Model:</strong> ").append(car.getModel()).append("</p>")
+                .append("<p><strong>License Plate:</strong> ").append(car.getLicensePlate()).append("</p>")
+                .append("<p><strong>Driver Required:</strong> ").append(booking.isDriverRequired() ? "Yes" : "No").append("</p>")
+                .append("</div>")
+                .append("<div class='invoice'>")
+                .append("<h2>Payment Details</h2>")
+                .append("<table>")
+                .append("<tr><th>Description</th><th>Amount</th></tr>")
+                .append("<tr><td>Base Rate</td><td>$").append(car.getBaseRate()).append("</td></tr>");
+        if (booking.isDriverRequired()) {
+            emailBody.append("<tr><td>Driver Rate</td><td>$").append(car.getDriverRate()).append("</td></tr>");
+        }
+        emailBody.append("<tr><td class='total'>Total Amount</td><td class='total'>$").append(booking.getTotalAmount()).append("</td></tr>")
+                .append("</table>")
+                .append("</div>")
+                .append("<div class='details'>")
+                .append("<h2>Cancellation Policy</h2>")
+                .append("<p>- Cancellations made more than 24 hours before the pickup time will receive a full refund.</p>")
+                .append("<p>- Cancellations made within 24 hours of the pickup time will incur a 10% cancellation fee.</p>")
+                .append("</div>")
+                .append("<p>If you have any questions or need to make changes to your booking, please contact our customer service team.</p>")
+                .append("<p><strong>Phone:</strong> +94 11 123 4567</p>")
+                .append("<p><strong>Email:</strong> support@megacitycab.com</p>")
+                .append("<p>Thank you for choosing MegaCityCab!</p>")
+                .append("<div class='footer'>")
+                .append("<p>&copy; 2025 MegaCityCab. All rights reserved.</p>")
+                .append("</div>")
+                .append("</div>")
+                .append("</div>")
+                .append("</body>")
+                .append("</html>");
+
+        return emailBody.toString();
+    }
+
 
     @Transactional(readOnly = true)
     public List<Booking> getCustomerBookings(String customerId) {

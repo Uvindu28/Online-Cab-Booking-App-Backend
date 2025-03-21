@@ -17,6 +17,7 @@ public interface DriverService {
     Driver updateDriver(String driverId, Driver driver);
     Driver updateAvailability(String driverId, boolean availability);
     List<Booking> getDriverBookings(String driverId);
+    Driver getDriverByEmail(String email);
     void deleteDriver(String driverId);
 
     

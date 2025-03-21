@@ -62,6 +62,16 @@ public class DriverController {
         return ResponseEntity.ok(driver);
     }
 
+    @GetMapping("/driverprofile")
+    public ResponseEntity<Driver> getOwnProfile(@AuthenticationPrincipal UserDetails userDetails) {
+        String email = userDetails.getUsername();
+        Driver driver = driverService.getDriverByEmail(email);
+        if (driver == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(driver);
+    }
+
     @PostMapping(value = "/createdriver",
             consumes = {MediaType.MULTIPART_FORM_DATA_VALUE},
             produces = MediaType.APPLICATION_JSON_VALUE)
@@ -101,6 +111,7 @@ public class DriverController {
                 car.setModel(model);
                 car.setNumberOfSeats(numberOfSeats != null ? numberOfSeats : 4);
                 car.setBaseRate(baseRate != null ? baseRate : 0.0);
+                car.setAssignedDriverId(driver.getDriverId());
                 car.setDriverRate(driverRate != null ? driverRate : 0.0);
                 if (carImage != null && !carImage.isEmpty()) {
                     String carImageUrl = cloudinaryService.uploadImage(carImage);

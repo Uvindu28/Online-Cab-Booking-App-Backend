@@ -38,13 +38,13 @@ public class Booking {
     private double totalAmount;
 
     @Transient
-    private String passengerName; // Added for frontend compatibility (mapped from Customer)
+    private String passengerName;
 
     @Transient
-    private String passengerImage; // Added for frontend compatibility (mapped from Customer)
+    private String passengerImage;
 
     @Transient
-    private Double passengerRating; // Added for frontend compatibility (mapped from Customer)
+    private Double passengerRating;
 
     private double tax;
 

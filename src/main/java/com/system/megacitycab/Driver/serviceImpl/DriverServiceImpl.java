@@ -56,20 +56,38 @@ public class DriverServiceImpl implements DriverService {
 
     @Override
     public ResponseEntity<?> createDriver(Driver driver, Car car) {
+        // Check if the email is already taken
         if (isEmailTaken(driver.getEmail())) {
             return ResponseEntity.badRequest()
-                .body("Email already exists: " + driver.getEmail());
-        }
-        String encodedPassword = passwordEncoder.encode(driver.getPassword());
-        driver.setPassword(encodedPassword);
-        if (car != null){
-            Car savedCar = carRepository.save(car);
-            driver.setCarId(savedCar.getCarId());
+                    .body("Email already exists: " + driver.getEmail());
         }
 
+        // Encode the driver's password
+        String encodedPassword = passwordEncoder.encode(driver.getPassword());
+        driver.setPassword(encodedPassword);
+
+        // If a car is provided, associate it with the driver
+        if (car != null) {
+            // Save the car first
+            Car savedCar = carRepository.save(car);
+
+            // Set the carId in the driver entity
+            driver.setCarId(savedCar.getCarId());
+
+            // Set the driverId in the car entity
+            savedCar.setAssignedDriverId(driver.getDriverId());
+            carRepository.save(savedCar); // Update the car with the driver's ID
+        }
+
+        // Save the driver
         Driver savedDriver = driverRepository.save(driver);
 
         return ResponseEntity.ok(savedDriver);
+    }
+
+    @Override
+    public Driver getDriverByEmail(String email) {
+        return driverRepository.findByEmail(email).orElse(null);
     }
 
     @Override

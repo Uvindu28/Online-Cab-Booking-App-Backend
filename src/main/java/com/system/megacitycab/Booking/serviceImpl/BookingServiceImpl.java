@@ -78,10 +78,32 @@ public class BookingServiceImpl implements BookingService {
     public Booking createBooking(BookingRequest request) {
         Car car = carRepository.findById(request.getCarId())
                 .orElseThrow(() -> new ResourceNotFoundException("Car not found"));
-        if (!isCarAvailableForTime(car, request.getPickupDate())) {
+
+        // Check car availability based on pickup date and time
+        if (!isCarAvailableForTime(car, request.getPickupDate(), request.getPickupTime())) {
             throw new InvalidBookingException("Car is not available for requested time");
         }
 
+        // Get current date and time
+        LocalDateTime now = LocalDateTime.now();
+        String currentDateStr = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String currentTimeStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
+
+        // Check if the booking time has already passed
+        boolean isPickupTimePassed = false;
+        try {
+            LocalDate bookingDate = LocalDate.parse(request.getPickupDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            LocalTime bookingTime = LocalTime.parse(request.getPickupTime(), DateTimeFormatter.ofPattern("HH:mm"));
+            LocalDate currentDate = LocalDate.parse(currentDateStr, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            LocalTime currentTime = LocalTime.parse(currentTimeStr, DateTimeFormatter.ofPattern("HH:mm"));
+
+            isPickupTimePassed = bookingDate.isBefore(currentDate) ||
+                    (bookingDate.isEqual(currentDate) && bookingTime.isBefore(currentTime));
+        } catch (Exception e) {
+            log.error("Error parsing dates for booking time check: {}", e.getMessage());
+        }
+
+        // Create booking
         Booking booking = new Booking();
         booking.setCustomerId(request.getCustomerId());
         booking.setCarId(request.getCarId());
@@ -98,8 +120,15 @@ public class BookingServiceImpl implements BookingService {
         if (request.isDriverRequired()) {
             assignDriverToBooking(booking, car);
         }
-        carRepository.save(car);
 
+        // Mark car as unavailable if pickup time has already passed
+        if (isPickupTimePassed) {
+            car.setAvailable(false);
+            booking.setStatus(BookingStatus.IN_PROGRESS);
+            log.info("Booking created with a past pickup time. Car {} marked as unavailable.", car.getCarId());
+        }
+
+        carRepository.save(car);
         Booking savedBooking = bookingRepository.save(booking);
 
         if (booking.isDriverRequired()) {
@@ -156,23 +185,45 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.existsByCustomerEmailAndDriverId(customerEmail, driverId);
     }
 
-    private boolean isCarAvailableForTime(Car car, String requestedTime) {
+    private boolean isCarAvailableForTime(Car car, String requestedDate, String requestedTime) {
         if (!car.isAvailable()) {
             return false;
         }
+
         List<Booking> existingBookings = bookingRepository.findByCarIdAndStatus(
                 car.getCarId(),
                 BookingStatus.CONFIRMED
         );
+
         return existingBookings.stream()
-                .noneMatch(booking -> isTimeOverlapping(booking.getPickupDate(), requestedTime));
+                .noneMatch(booking -> isTimeOverlapping(booking.getPickupDate(), booking.getPickupTime(),
+                        requestedDate, requestedTime));
     }
 
-    private boolean isTimeOverlapping(String existing, String requested) {
-        LocalDateTime existingTime = parsePickupDate(existing);
-        LocalDateTime requestedTime = parsePickupDate(requested);
-        Duration buffer = Duration.ofHours(1);
-        return Math.abs(Duration.between(existingTime, requestedTime).toHours()) < buffer.toHours();
+
+    private boolean isTimeOverlapping(String existingDate, String existingTime,
+                                      String requestedDate, String requestedTime) {
+        try {
+            LocalDate existingDateObj = LocalDate.parse(existingDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            LocalTime existingTimeObj = LocalTime.parse(existingTime, DateTimeFormatter.ofPattern("HH:mm"));
+            LocalDate requestedDateObj = LocalDate.parse(requestedDate, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            LocalTime requestedTimeObj = LocalTime.parse(requestedTime, DateTimeFormatter.ofPattern("HH:mm"));
+
+            // If dates are different, no overlap
+            if (!existingDateObj.isEqual(requestedDateObj)) {
+                return false;
+            }
+
+            // If dates are the same, check if times are within 1 hour of each other
+            LocalDateTime existingDateTime = LocalDateTime.of(existingDateObj, existingTimeObj);
+            LocalDateTime requestedDateTime = LocalDateTime.of(requestedDateObj, requestedTimeObj);
+
+            Duration buffer = Duration.ofHours(1);
+            return Math.abs(Duration.between(existingDateTime, requestedDateTime).toHours()) < buffer.toHours();
+        } catch (Exception e) {
+            log.error("Error parsing dates for time overlap check: {}", e.getMessage());
+            return false;
+        }
     }
 
     private double calculateBookingAmount(Car car, BookingRequest request) {
@@ -280,42 +331,39 @@ public class BookingServiceImpl implements BookingService {
     public void checkAndUpdateCarAvailability() {
         ZoneId sriLankaZoneId = ZoneId.of("Asia/Colombo");
         LocalDateTime now = LocalDateTime.now(sriLankaZoneId);
-        LocalDate today = now.toLocalDate();
-        LocalTime currentTime = now.toLocalTime().truncatedTo(ChronoUnit.SECONDS);
 
-        List<Booking> activeBookings = bookingRepository.findByStatusAndPickupDateBefore(
-                BookingStatus.CONFIRMED, now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        // Format current date and time as strings
+        String currentDateStr = now.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String currentTimeStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
 
-        for (Booking booking : activeBookings) {
-            LocalDateTime pickupDateTime = parsePickupDate(booking.getPickupDate());
-            if (pickupDateTime.isBefore(now)) {
-                String carId = booking.getCarId();
-                Optional<Car> car = carRepository.findById(carId);
-                car.ifPresent(c -> {
-                    c.setAvailable(false);
-                    carRepository.save(c);
-                });
+        // Get bookings with passed pickup time using the new repository method
+        List<Booking> passedBookings = bookingRepository.findBookingsWithPassedPickupTime(
+                List.of(BookingStatus.PENDING.toString(), BookingStatus.CONFIRMED.toString()),
+                currentDateStr,
+                currentTimeStr
+        );
 
-                updateBookingStatus(booking);
-            }
+        for (Booking booking : passedBookings) {
+            String carId = booking.getCarId();
+            Optional<Car> car = carRepository.findById(carId);
+            car.ifPresent(c -> {
+                c.setAvailable(false);
+                carRepository.save(c);
+                log.info("Car {} marked as unavailable due to past pickup time for booking {}",
+                        carId, booking.getBookingId());
+            });
+
+            updateBookingStatus(booking);
         }
 
         log.info("Completed periodic booking status check at {}", now);
     }
 
     private void updateBookingStatus(Booking booking) {
-        try {
-            LocalDateTime pickupTime = parsePickupDate(booking.getPickupDate());
-            LocalDateTime now = LocalDateTime.now();
-
-            if (now.isAfter(pickupTime)) {
-                booking.setStatus(BookingStatus.IN_PROGRESS);
-                bookingRepository.save(booking);
-                log.info("Updated booking {} status to IN_PROGRESS", booking.getBookingId());
-            }
-        } catch (DateTimeParseException e) {
-            log.error("Failed to parse pickup date for booking {}: {}",
-                    booking.getBookingId(), booking.getPickupDate(), e);
+        if (booking.getStatus() == BookingStatus.PENDING || booking.getStatus() == BookingStatus.CONFIRMED) {
+            booking.setStatus(BookingStatus.IN_PROGRESS);
+            bookingRepository.save(booking);
+            log.info("Updated booking {} status to IN_PROGRESS", booking.getBookingId());
         }
     }
 
@@ -427,11 +475,11 @@ public class BookingServiceImpl implements BookingService {
                 .append("<h2>Payment Details</h2>")
                 .append("<table>")
                 .append("<tr><th>Description</th><th>Amount</th></tr>")
-                .append("<tr><td>Base Rate</td><td>$").append(car.getBaseRate()).append("</td></tr>");
+                .append("<tr><td>Base Rate</td><td>Rs. ").append(car.getBaseRate()).append("</td></tr>");
         if (booking.isDriverRequired()) {
-            emailBody.append("<tr><td>Driver Rate</td><td>$").append(car.getDriverRate()).append("</td></tr>");
+            emailBody.append("<tr><td>Driver Rate</td><td>Rs. ").append(car.getDriverRate()).append("</td></tr>");
         }
-        emailBody.append("<tr><td class='total'>Total Amount</td><td class='total'>$").append(booking.getTotalAmount()).append("</td></tr>")
+        emailBody.append("<tr><td class='total'>Total Amount</td><td class='total'>Rs. ").append(booking.getTotalAmount()).append("</td></tr>")
                 .append("</table>")
                 .append("</div>")
                 .append("<div class='details'>")

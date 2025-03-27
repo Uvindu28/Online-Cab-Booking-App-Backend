@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import com.system.megacitycab.Booking.model.Booking;
+import com.system.megacitycab.Booking.service.BookingService;
 import com.system.megacitycab.Car.model.Car;
 import com.system.megacitycab.Cloudinary.CloudinaryService;
 import com.system.megacitycab.Customer.model.Customer;
@@ -37,14 +38,38 @@ public class DriverController {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private BookingService bookingService;
+
     @GetMapping("/getalldrivers")
     public List<Driver> getAllDrivers() {
         return driverService.getAllDrivers();
     }
 
     @GetMapping("/getdriver/{driverId}")
-    public Driver getDriverById(@PathVariable String driverId) {
-        return driverService.getDriverById(driverId); // Ensure Car is included in the response
+    public ResponseEntity<Driver> getDriverById(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable String driverId) {
+        String email = userDetails.getUsername();
+
+        // Check if the user has a booking with this driver
+        boolean hasBooking = bookingService.hasBookingWithDriver(email, driverId);
+        if (!hasBooking) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        Driver driver = driverService.getDriverById(driverId);
+        return ResponseEntity.ok(driver);
+    }
+
+    @GetMapping("/driverprofile")
+    public ResponseEntity<Driver> getOwnProfile(@AuthenticationPrincipal UserDetails userDetails) {
+        String email = userDetails.getUsername();
+        Driver driver = driverService.getDriverByEmail(email);
+        if (driver == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(driver);
     }
 
     @PostMapping(value = "/createdriver",
@@ -86,6 +111,7 @@ public class DriverController {
                 car.setModel(model);
                 car.setNumberOfSeats(numberOfSeats != null ? numberOfSeats : 4);
                 car.setBaseRate(baseRate != null ? baseRate : 0.0);
+                car.setAssignedDriverId(driver.getDriverId());
                 car.setDriverRate(driverRate != null ? driverRate : 0.0);
                 if (carImage != null && !carImage.isEmpty()) {
                     String carImageUrl = cloudinaryService.uploadImage(carImage);
